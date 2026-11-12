@@ -72,7 +72,7 @@ typecheck: $(NODE_MODULES) ## Type-check without emitting
 fmt: $(NODE_MODULES) ## Format src/ with prettier
 	npx prettier --write "src/**/*.ts"
 
-fmt-check: $(NODE_MODULES) ## Check formatting (not in ci: upstream files are not prettier-clean)
+fmt-check: $(NODE_MODULES) ## Check formatting (src/wmd/original/ is ignored: copied from webminidisc)
 	npx prettier --check "src/**/*.ts"
 
 ##@ Test & CI
@@ -91,9 +91,9 @@ endif
 audit: $(NODE_MODULES) ## npm audit (fails on moderate or above)
 	npm audit --audit-level=moderate
 
-ci: ## Everything a push should pass: audit, typecheck, tests
+ci: ## Everything a push should pass: audit, formatting, typecheck, tests
 	@printf '$(CYAN)Running CI checks...$(NC)\n'
-	@$(MAKE) --no-print-directory audit typecheck test
+	@$(MAKE) --no-print-directory audit fmt-check typecheck test
 	@printf '$(GREEN)All CI checks passed.$(NC)\n'
 
 ##@ Package & Release
