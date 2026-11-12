@@ -29,7 +29,6 @@ help: ## Display this help screen
 	@printf '  day to day      $(GREEN)dev$(NC) (builds renderer once, then tsc + electron)\n'
 	@printf '  before pushing  $(GREEN)ci$(NC)\n'
 	@printf '  release         $(GREEN)release$(NC) VERSION=x.y.z -> tag push -> GitHub Actions draft release\n'
-	@printf '\n  $(GREEN)build$(NC)/$(GREEN)dev$(NC) run scripts/run-fixes.sh, which needs $(RED)gsed$(NC) on macOS (brew install gnu-sed).\n'
 
 ##@ Setup
 
@@ -47,7 +46,6 @@ doctor: ## Check the toolchain for this machine
 	@printf 'node      '; node -v 2>/dev/null || printf '$(RED)missing$(NC)\n'
 	@printf 'npm       '; npm -v 2>/dev/null || printf '$(RED)missing$(NC)\n'
 	@if [ "$(UNAME)" = "Darwin" ]; then \
-		printf 'gsed      '; command -v gsed >/dev/null && printf '$(GREEN)ok$(NC)\n' || printf '$(RED)missing$(NC) (brew install gnu-sed)\n'; \
 		printf 'xcode cli '; xcode-select -p >/dev/null 2>&1 && printf '$(GREEN)ok$(NC)\n' || printf '$(RED)missing$(NC) (xcode-select --install)\n'; \
 	fi
 	@printf 'submodule '; [ -f $(SUBMODULE) ] && printf '$(GREEN)ok$(NC)\n' || printf '$(YELLOW)not initialised$(NC) (make submodules)\n'
