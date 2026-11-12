@@ -18,16 +18,18 @@ import { WebUSBInterop } from './wusb-interop';
 
 const getOfRenderer = (...p: string[]) => path.join(__dirname, '..', 'renderer', ...p);
 
-async function ewmdOpenDialog(window: BrowserWindow, filters: FileFilter[], directory?: boolean){
+async function ewmdOpenDialog(window: BrowserWindow, filters: FileFilter[], directory?: boolean) {
     const res = await dialog.showOpenDialog(window, { filters, properties: [directory ? 'openDirectory' : 'openFile'] });
-    if(res.canceled) return null;
+    if (res.canceled) return null;
     else return res.filePaths[0];
 }
 
-function reload(window: BrowserWindow){
+function reload(window: BrowserWindow) {
     // AppImages do not restart correctly
     if (app.isPackaged && process.env.APPIMAGE) {
-        dialog.showMessageBoxSync(window, { message: "This is an AppImage. Electron has a bug where AppImages cannot restart. Please restart the app manually" });
+        dialog.showMessageBoxSync(window, {
+            message: 'This is an AppImage. Electron has a bug where AppImages cannot restart. Please restart the app manually',
+        });
     }
     app.relaunch();
     app.exit();
@@ -53,7 +55,7 @@ function setupSettings(window: BrowserWindow) {
         {
             family: 'Functionality',
             name: 'Open Devtools',
-            async handleChange(){
+            async handleChange() {
                 window.webContents.openDevTools();
             },
             state: 0,
@@ -62,13 +64,14 @@ function setupSettings(window: BrowserWindow) {
         {
             family: 'Functionality',
             name: 'Use a Default Download Directory',
-            async handleChange(newVal: boolean){
-                if(newVal) {
+            async handleChange(newVal: boolean) {
+                if (newVal) {
                     // Enabled
-                    if(!store.get('downloadPath', null)) { // Match both '' and null
+                    if (!store.get('downloadPath', null)) {
+                        // Match both '' and null
                         // Ask the user for the path
                         const userProvided = await ewmdOpenDialog(window, [], true);
-                        if(!userProvided) return; // If the user cancelled, do not write any changes
+                        if (!userProvided) return; // If the user cancelled, do not write any changes
                         store.set('downloadPath', userProvided);
                     }
                 }
@@ -77,69 +80,74 @@ function setupSettings(window: BrowserWindow) {
             state: store.get('useDownloadPath', false) as boolean,
             type: 'boolean',
         },
-        store.get('useDownloadPath', false) ? {
-            family: 'Functionality',
-            name: 'Default Download Directory',
-            async handleChange(newVal: string){
-                if(!newVal && store.get('downloadPath', '')){
-                    // If the user cancelled, but there's a path set already, do not do anything
-                    return;
-                }
-                if(!newVal){
-                    // The user cancelled, and there's nothing set (edge case)
-                    // Disable the menu option
-                    store.set('useDownloadPath', false);
-                }
-                store.set('downloadPath', newVal);
-            },
-            type: 'hostDirPath',
-            state: store.get('downloadPath', '') as string,
-        }: null,
+        store.get('useDownloadPath', false)
+            ? {
+                  family: 'Functionality',
+                  name: 'Default Download Directory',
+                  async handleChange(newVal: string) {
+                      if (!newVal && store.get('downloadPath', '')) {
+                          // If the user cancelled, but there's a path set already, do not do anything
+                          return;
+                      }
+                      if (!newVal) {
+                          // The user cancelled, and there's nothing set (edge case)
+                          // Disable the menu option
+                          store.set('useDownloadPath', false);
+                      }
+                      store.set('downloadPath', newVal);
+                  },
+                  type: 'hostDirPath',
+                  state: store.get('downloadPath', '') as string,
+              }
+            : null,
         {
             family: 'Functionality',
             name: 'Import NetworkWM Keyring Data',
             type: 'action',
             state: 0,
             async handleChange() {
-                const resp = await prompt({
-                    title: 'Keyring Import',
-                    label: 'Please enter the keyring string below',
-                    inputAttrs: {
-                        type: 'text',
-                    }
-                }, window);
-                if(resp === null) return;
+                const resp = await prompt(
+                    {
+                        title: 'Keyring Import',
+                        label: 'Please enter the keyring string below',
+                        inputAttrs: {
+                            type: 'text',
+                        },
+                    },
+                    window
+                );
+                if (resp === null) return;
                 let rawData;
                 let backup = { ...EKBROOTS };
                 Object.keys(EKBROOTS).forEach((e: any) => delete EKBROOTS[e]);
-                try{
-                    rawData = Uint8Array.from(atob(resp), e => e.charCodeAt(0));
+                try {
+                    rawData = Uint8Array.from(atob(resp), (e) => e.charCodeAt(0));
                     importKeys(rawData);
-                }catch(ex){
+                } catch (ex) {
                     dialog.showMessageBoxSync(window, { message: 'Keyring import failed.' });
-                    Object.keys(EKBROOTS).forEach((e: any) => EKBROOTS[e] = backup[e]); 
+                    Object.keys(EKBROOTS).forEach((e: any) => (EKBROOTS[e] = backup[e]));
                     return;
                 }
                 fs.writeFileSync(path.join(app.getPath('userData'), 'EKBROOTS.DES'), rawData);
                 reload(window);
-            }
-        }
+            },
+        },
     ];
-    const settings = _settings.filter(e => e);
+    const settings = _settings.filter((e) => e);
 
     ipcMain.removeHandler('setting_update');
     ipcMain.removeHandler('fetch_settings_list');
 
-    ipcMain.handle("setting_update", async (_, name: string, newValue: Setting['state']) => {
-        const setting = settings.find(e => e?.name === name);
-        if((setting as any).handleChange){
+    ipcMain.handle('setting_update', async (_, name: string, newValue: Setting['state']) => {
+        const setting = settings.find((e) => e?.name === name);
+        if ((setting as any).handleChange) {
             await (setting as any).handleChange(newValue);
             setupSettings(window);
         }
     });
 
-    ipcMain.handle("fetch_settings_list", () => {
-        return settings.map(e => {
+    ipcMain.handle('fetch_settings_list', () => {
+        return settings.map((e) => {
             let q = { ...e } as any;
             delete q['handleChange'];
             return q;
@@ -149,43 +157,52 @@ function setupSettings(window: BrowserWindow) {
 
 function setupEncoder() {
     function invoke(program: string, args: string[]): Promise<boolean> {
-        return new Promise<boolean>(res => {
+        return new Promise<boolean>((res) => {
             const name = path.basename(program);
             const process = spawn(program, args);
             process.on('close', (e) => res(e === 0));
-            process.stdout.on('data', e => console.log(`[${name} - STDOUT]: ${e.toString().trim()}`));
-            process.stderr.on('data', e => console.log(`[${name} - STDERR]: ${e.toString().trim()}`));
+            process.stdout.on('data', (e) => console.log(`[${name} - STDOUT]: ${e.toString().trim()}`));
+            process.stderr.on('data', (e) => console.log(`[${name} - STDERR]: ${e.toString().trim()}`));
         });
     }
 
-    ipcMain.handle("invokeLocalEncoder", async (_, encoderPath: string, data: ArrayBuffer, sourceFilename: string, parameters: { format: Codec, enableReplayGain?: boolean }) => {
-        // Pipeline:
-        // inFile.ANY ==(ffmpeg)==> inFile.wav ==(encoder)==> outFile.wav
-        let tempDir = '';
-        if ( os.platform() === 'darwin') {
-            const homeDir = app.getPath('home');
-            tempDir = path.join(homeDir, 'Library','Caches','ElectronWMD');
-        } else {
-            tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atracenc'));
-        }
+    ipcMain.handle(
+        'invokeLocalEncoder',
+        async (
+            _,
+            encoderPath: string,
+            data: ArrayBuffer,
+            sourceFilename: string,
+            parameters: { format: Codec; enableReplayGain?: boolean }
+        ) => {
+            // Pipeline:
+            // inFile.ANY ==(ffmpeg)==> inFile.wav ==(encoder)==> outFile.wav
+            let tempDir = '';
+            if (os.platform() === 'darwin') {
+                const homeDir = app.getPath('home');
+                tempDir = path.join(homeDir, 'Library', 'Caches', 'ElectronWMD');
+            } else {
+                tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atracenc'));
+            }
 
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir);
-        }
-        const inFilePath = path.join(tempDir, sourceFilename);
-        fs.writeFileSync(inFilePath, new Uint8Array(data));
+            if (!fs.existsSync(tempDir)) {
+                fs.mkdirSync(tempDir);
+            }
+            const inFilePath = path.join(tempDir, sourceFilename);
+            fs.writeFileSync(inFilePath, new Uint8Array(data));
 
-        const outFilePath = path.join(tempDir, "output.wav");
-        const bitrateString = (parameters.format.bitrate! + '');
-        const allArgs = ['-e', '-br', bitrateString, inFilePath, outFilePath];
-        console.log(`Executing encoder EXE: ${encoderPath}. ARGS: ${allArgs}`);
-        await invoke(encoderPath, allArgs);
-        const rawData = new Uint8Array(fs.readFileSync(outFilePath)).buffer;
-        fs.unlinkSync(outFilePath);
-        fs.unlinkSync(inFilePath);
-        fs.rmdirSync(tempDir);
-        return rawData;
-    });
+            const outFilePath = path.join(tempDir, 'output.wav');
+            const bitrateString = parameters.format.bitrate! + '';
+            const allArgs = ['-e', '-br', bitrateString, inFilePath, outFilePath];
+            console.log(`Executing encoder EXE: ${encoderPath}. ARGS: ${allArgs}`);
+            await invoke(encoderPath, allArgs);
+            const rawData = new Uint8Array(fs.readFileSync(outFilePath)).buffer;
+            fs.unlinkSync(outFilePath);
+            fs.unlinkSync(inFilePath);
+            fs.rmdirSync(tempDir);
+            return rawData;
+        }
+    );
 }
 
 async function createWindow() {
@@ -199,7 +216,7 @@ async function createWindow() {
         },
     });
 
-    console.log(app.getPath('exe'))
+    console.log(app.getPath('exe'));
 
     await integrate(window);
     window.setMenuBarVisibility(false);
@@ -219,7 +236,7 @@ async function createWindow() {
             let filename = path.join(downloadPath, baseFilename);
             const { name, ext } = path.parse(baseFilename);
             let i = 1;
-            while(fs.existsSync(filename)){
+            while (fs.existsSync(filename)) {
                 filename = path.join(downloadPath, `${name} (${i++})${ext}`);
             }
             item.setSavePath(filename);
@@ -227,12 +244,12 @@ async function createWindow() {
     });
 }
 
-function getDefinedFunctions(currentObj: any){
+function getDefinedFunctions(currentObj: any) {
     const defined = new Set<string>();
-    do{
+    do {
         Object.getOwnPropertyNames(currentObj)
-        .filter((n) => typeof currentObj[n] == 'function' && !(n in defined))
-        .forEach(defined.add.bind(defined));
+            .filter((n) => typeof currentObj[n] == 'function' && !(n in defined))
+            .forEach(defined.add.bind(defined));
     } while ((currentObj = Object.getPrototypeOf(currentObj)));
     return defined;
 }
@@ -246,22 +263,21 @@ function traverseObject(window: BrowserWindow, objectFactory: () => any, namespa
         ipcMain.handle(translatedName, async function (_, ...allArgs: any[]) {
             for (let i = 0; i < allArgs.length; i++) {
                 if (allArgs[i]?.interprocessType === 'function') {
-                    allArgs[i] = async (...args: any[]) =>
-                        {
-                            window.webContents.send('_callback', `${translatedName}_callback${i}`, ...args);
-                        }
+                    allArgs[i] = async (...args: any[]) => {
+                        window.webContents.send('_callback', `${translatedName}_callback${i}`, ...args);
+                    };
                 }
             }
             try {
                 return [await objectFactory()[n](...allArgs), null];
             } catch (err) {
-                console.log("Node Error: ");
+                console.log('Node Error: ');
                 console.log(err);
                 return [null, err];
             }
         });
     });
-    return Array.from(defined).map(e => namespace + e);
+    return Array.from(defined).map((e) => namespace + e);
 }
 
 async function integrate(window: BrowserWindow) {
@@ -285,7 +301,7 @@ async function integrate(window: BrowserWindow) {
     let currentObj = service as any;
     console.log(currentObj);
 
-    const defList = traverseObject(window, () => currentObj, "_netmd_");
+    const defList = traverseObject(window, () => currentObj, '_netmd_');
     ipcMain.handle('_netmd__definedParameters', () => defList);
 
     let alreadySwitched = false;
@@ -299,17 +315,12 @@ async function integrate(window: BrowserWindow) {
         if (alreadySwitched) return factoryDefList;
         alreadySwitched = true;
 
-        factoryDefList = traverseObject(
-            window,
-            () => factoryIface,
-            "_factory__"
-        );
-
+        factoryDefList = traverseObject(window, () => factoryIface, '_factory__');
 
         // exploitDownloadTrack uses nested objects with callbacks, and callbacks with return values.
         // The nomral ipc-copying code can't be used for that.
         let shouldAbortAtracDownload = false;
-        let handleBadSectorResolve: ((arg: "reload" | "abort" | "skip" | "yieldanyway") => void) | null = null
+        let handleBadSectorResolve: ((arg: 'reload' | 'abort' | 'skip' | 'yieldanyway') => void) | null = null;
 
         ipcMain.removeHandler('_factory__exploitDownloadTrack');
         ipcMain.handle('_factory__exploitDownloadTrack', async (_, ...allArgs: Parameters<NetMDFactoryService['exploitDownloadTrack']>) => {
@@ -323,25 +334,27 @@ async function integrate(window: BrowserWindow) {
                 ...allArgs[3],
                 handleBadSector: async (...args: any[]) => {
                     window.webContents.send('_atracdl_callback_handleBadSector', ...args);
-                    return await new Promise<"reload" | "abort" | "skip" | "yieldanyway">(res => handleBadSectorResolve = res);
+                    return await new Promise<'reload' | 'abort' | 'skip' | 'yieldanyway'>((res) => (handleBadSectorResolve = res));
                 },
                 shouldCancelImmediately: () => shouldAbortAtracDownload,
             };
-            if(!enableHandleBadSector) delete allArgs[3].handleBadSector;
-            if(!enableShouldCancelImmediately) delete allArgs[3].shouldCancelImmediately;
+            if (!enableHandleBadSector) delete allArgs[3].handleBadSector;
+            if (!enableShouldCancelImmediately) delete allArgs[3].shouldCancelImmediately;
             allArgs[2] = async (...args: any[]) =>
                 window.webContents.send('_callback', `_factory__exploitDownloadTrack_callback2`, ...args);
 
-            try{
+            try {
                 return [await factoryIface.exploitDownloadTrack(...allArgs), null];
-            }catch (err) {
-                console.log("Node Error: ");
+            } catch (err) {
+                console.log('Node Error: ');
                 console.log(err);
                 return [null, err];
             }
         });
-        ipcMain.handle('_atracdl_cancel', () => shouldAbortAtracDownload = true);
-        ipcMain.handle('_atracdl_callback_handleBadSector_return', (_, status: "reload" | "abort" | "skip" | "yieldanyway") => handleBadSectorResolve?.(status));
+        ipcMain.handle('_atracdl_cancel', () => (shouldAbortAtracDownload = true));
+        ipcMain.handle('_atracdl_callback_handleBadSector_return', (_, status: 'reload' | 'abort' | 'skip' | 'yieldanyway') =>
+            handleBadSectorResolve?.(status)
+        );
 
         return factoryDefList;
     });
@@ -349,52 +362,55 @@ async function integrate(window: BrowserWindow) {
     const himdService = new EWMDHiMD({ debug: true });
 
     let keyData: Uint8Array | undefined = undefined;
-    try{
+    try {
         keyData = new Uint8Array(fs.readFileSync(path.join(app.getPath('userData'), 'EKBROOTS.DES')));
-    }catch(_){ console.log("Can't read roots") }
+    } catch (_) {
+        console.log("Can't read roots");
+    }
     const nwService = new NetworkWMService(keyData);
 
-    if(process.platform !== 'darwin') {
-        const himdDeflist = traverseObject(window, () => himdService, "_himd_");
+    if (process.platform !== 'darwin') {
+        const himdDeflist = traverseObject(window, () => himdService, '_himd_');
         ipcMain.handle('_himd__definedParameters', () => himdDeflist);
-        const nwDeflist = traverseObject(window, () => nwService, "_nwjs_");
-        ipcMain.handle('_nwjs__definedParameters', () => nwDeflist);    
+        const nwDeflist = traverseObject(window, () => nwService, '_nwjs_');
+        ipcMain.handle('_nwjs__definedParameters', () => nwDeflist);
     } else {
         const connection = new Connection();
         connection.deviceDisconnectedCallback = () => reload(window);
         const connectionMutex = new Mutex();
 
-        connection.callbackHandler = (service, name: string, ...args: any[]) => window.webContents.send("_callback", (service === 'himd' ? '_himd_' : '_nwjs_') + name, ...args);
+        connection.callbackHandler = (service, name: string, ...args: any[]) =>
+            window.webContents.send('_callback', (service === 'himd' ? '_himd_' : '_nwjs_') + name, ...args);
         const himdDefinedMethods = getDefinedFunctions(himdService);
-        ipcMain.handle('_himd__definedParameters', () => [...himdDefinedMethods].map(e => '_himd_' + e));
-        for(let methodName of himdDefinedMethods){
+        ipcMain.handle('_himd__definedParameters', () => [...himdDefinedMethods].map((e) => '_himd_' + e));
+        for (let methodName of himdDefinedMethods) {
             ipcMain.handle(`_himd_${methodName}`, async (_, ...allArgs: any[]) => {
                 console.log(`Execute: ${methodName}`);
-                if(methodName === 'connect'){
+                if (methodName === 'connect') {
                     let connectionEstablished = false;
-                    if(connection.socket) {
+                    if (connection.socket) {
                         connection.disconnect();
                     }
-                    try{
+                    try {
                         startServer();
-                    }catch(ex) {
+                    } catch (ex) {
                         return [null, ex];
                     }
                     const error = await connection.awaitConnection();
                     connectionEstablished = true;
-                    if(error) {
+                    if (error) {
                         return [null, error];
                     }
                 }
-                if(!connection.socket) {
-                    return [null, new Error("Server not ready!")];
+                if (!connection.socket) {
+                    return [null, new Error('Server not ready!')];
                 }
 
                 const release = await connectionMutex.acquire();
                 try {
                     return [await connection.callMethod('himd', methodName, ...allArgs), null];
                 } catch (err) {
-                    console.log("External HIMD Error: ");
+                    console.log('External HIMD Error: ');
                     console.log(err);
                     return [null, err];
                 } finally {
@@ -404,35 +420,35 @@ async function integrate(window: BrowserWindow) {
         }
 
         const nwjsDefinedMethods = getDefinedFunctions(himdService);
-        ipcMain.handle('_nwjs__definedParameters', () => [...nwjsDefinedMethods].map(e => '_nwjs_' + e));
-        for(let methodName of nwjsDefinedMethods){
+        ipcMain.handle('_nwjs__definedParameters', () => [...nwjsDefinedMethods].map((e) => '_nwjs_' + e));
+        for (let methodName of nwjsDefinedMethods) {
             ipcMain.handle(`_nwjs_${methodName}`, async (_, ...allArgs: any[]) => {
                 console.log(`Execute: ${methodName}`);
-                if(methodName === 'connect'){
+                if (methodName === 'connect') {
                     let connectionEstablished = false;
-                    if(connection.socket) {
+                    if (connection.socket) {
                         connection.disconnect();
                     }
-                    try{
+                    try {
                         startServer();
-                    }catch(ex) {
+                    } catch (ex) {
                         return [null, ex];
                     }
                     const error = await connection.awaitConnection();
                     connectionEstablished = true;
-                    if(error) {
+                    if (error) {
                         return [null, error];
                     }
                 }
-                if(!connection.socket) {
-                    return [null, new Error("Server not ready!")];
+                if (!connection.socket) {
+                    return [null, new Error('Server not ready!')];
                 }
 
                 const release = await connectionMutex.acquire();
                 try {
                     return [await connection.callMethod('nwjs', methodName, ...allArgs), null];
                 } catch (err) {
-                    console.log("External NWJS Error: ");
+                    console.log('External NWJS Error: ');
                     console.log(err);
                     return [null, err];
                 } finally {
@@ -452,8 +468,8 @@ async function integrate(window: BrowserWindow) {
     ipcMain.handle('_debug_himdPullFile', async (e, a: string, b: string) => {
         console.log(`Pulling HiMD file ${a} to local ${b}`);
         const handle = await himdService.fsDriver!.fatfs!.open(a, false);
-        if(!handle){
-            console.log("No file!");
+        if (!handle) {
+            console.log('No file!');
             return;
         }
         fs.writeFileSync(b, await handle.readAll());
@@ -462,16 +478,19 @@ async function integrate(window: BrowserWindow) {
     ipcMain.handle('_debug_himdList', async (e, a: string) => {
         console.log(`Listing HiMD dir ${a}`);
         const list = await himdService.fsDriver!.fatfs!.listDir(a);
-        if(!list){
-            console.log("No such dir!");
+        if (!list) {
+            console.log('No such dir!');
             return;
         }
         console.log(list.join(', '));
     });
 
-    ipcMain.handle("openFileHostDialog", async (_, filters: { name: string, extensions: string[] }[], directory?: boolean): Promise<string | null> => {
-        return ewmdOpenDialog(window, filters, directory);     
-    });
+    ipcMain.handle(
+        'openFileHostDialog',
+        async (_, filters: { name: string; extensions: string[] }[], directory?: boolean): Promise<string | null> => {
+            return ewmdOpenDialog(window, filters, directory);
+        }
+    );
 
     setupSettings(window);
     setupEncoder();
@@ -480,26 +499,26 @@ async function integrate(window: BrowserWindow) {
     const addKnownDeviceCB = webusb.addKnownDevice.bind(webusb);
     nwService.deviceConnectedCallback = addKnownDeviceCB;
     himdService.deviceConnectedCallback = addKnownDeviceCB;
-    webusb.ondisconnect = event => {
-        if([service, himdService, nwService].some(e => e.isDeviceConnected(event.device))) {
+    webusb.ondisconnect = (event) => {
+        if ([service, himdService, nwService].some((e) => e.isDeviceConnected(event.device))) {
             reload(window);
         }
-    }
+    };
 }
 
 contextMenu({
     showInspectElement: false,
 });
 protocol.registerSchemesAsPrivileged([
-  {
-    scheme: 'sandbox',
-    privileges: {
-      standard: true,
-      secure: true,
-      corsEnabled: true,
-      supportFetchAPI: true
-    }
-  }
+    {
+        scheme: 'sandbox',
+        privileges: {
+            standard: true,
+            secure: true,
+            corsEnabled: true,
+            supportFetchAPI: true,
+        },
+    },
 ]);
 app.whenReady().then(() => {
     protocol.handle('sandbox', (rq) => {

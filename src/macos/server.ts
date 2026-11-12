@@ -11,26 +11,28 @@ const socketName = getSocketPath();
 const pidFile = getPidPath();
 const workDir = getSocketDir();
 const canFail = (func: () => void) => {
-    try{ func() } catch(_){}
-}
+    try {
+        func();
+    } catch (_) {}
+};
 
-function closeAll(){
+function closeAll() {
     canFail(() => fs.unlinkSync(socketName));
     canFail(() => fs.unlinkSync(pidFile));
     process.exit();
 }
 function main() {
     console.log("ElectronWMD's MacOS SCSI intermediate server by asivery");
-    console.log("Starting up...");
+    console.log('Starting up...');
     console.log(`Base dir: ${workDir}`);
     console.log(`Socket path: ${socketName}`);
     console.log(`PID file: ${pidFile}`);
-    if(fs.existsSync(pidFile)) {
+    if (fs.existsSync(pidFile)) {
         const oldPid = parseInt(fs.readFileSync(pidFile).toString());
         canFail(() => process.kill(oldPid, 'SIGTERM'));
         canFail(() => fs.unlinkSync(pidFile));
     }
-    
+
     fs.writeFileSync(pidFile, `${process.pid}`);
     const webusb = WebUSBInterop.create();
 
@@ -56,8 +58,12 @@ function main() {
             const originalUid = isFinite(process.env.ORIGINAL_UID as any) ? parseInt(process.env.ORIGINAL_UID) : null;
             const originalGid = isFinite(process.env.ORIGINAL_GID as any) ? parseInt(process.env.ORIGINAL_GID) : null;
             if (originalUid !== null && originalGid !== null) {
-                try { fs.chownSync(socketName, originalUid, originalGid); } catch (_) {}
-                try { fs.chmodSync(socketName, 0o600); } catch (_) {}
+                try {
+                    fs.chownSync(socketName, originalUid, originalGid);
+                } catch (_) {}
+                try {
+                    fs.chmodSync(socketName, 0o600);
+                } catch (_) {}
                 console.log(`Socket ownership set to ${originalUid}:${originalGid ?? 0} and mode 0600`);
             } else {
                 fs.chmodSync(socketName, 0o777);
@@ -67,9 +73,9 @@ function main() {
             console.error('Failed setting socket ownership/permissions:', err);
         }
     });
-    server.on("close", closeAll);
+    server.on('close', closeAll);
     server.on('connection', (socket) => {
-        console.log("Connection established.");
+        console.log('Connection established.');
         socket.on('close', closeAll);
         const packerStream = new PackrStream({
             copyBuffers: true,
@@ -83,31 +89,32 @@ function main() {
         const himdDevice = new EWMDHiMD({ debug: true });
 
         let keyData: Uint8Array | undefined = undefined;
-        try{
+        try {
             keyData = new Uint8Array(fs.readFileSync(path.join(process.argv[2], 'EKBROOTS.DES')));
-        }catch(_){ console.log("Can't read roots") }
+        } catch (_) {
+            console.log("Can't read roots");
+        }
         const nwDevice = new NetworkWMService(keyData);
 
         socket.pipe(unpackerStream);
         packerStream.pipe(socket);
 
-        function sendCallback(service: string, callbackFunctionName: string, ...args: any[]){
+        function sendCallback(service: string, callbackFunctionName: string, ...args: any[]) {
             packerStream.write({
                 type: 'callback',
                 name: callbackFunctionName,
                 service,
                 value: args,
-            })
+            });
         }
 
-        unpackerStream.on('data', async ({ service, name, allArgs }: { service: string, name: string, allArgs: any[] }) => {
+        unpackerStream.on('data', async ({ service, name, allArgs }: { service: string; name: string; allArgs: any[] }) => {
             console.log(`Call to ${name}`);
             for (let i = 0; i < allArgs.length; i++) {
                 if (allArgs[i]?.interprocessType === 'function') {
-                    allArgs[i] = async (...args: any[]) =>
-                        {
-                            sendCallback(service, `${name}_callback${i}`, ...args);
-                        }
+                    allArgs[i] = async (...args: any[]) => {
+                        sendCallback(service, `${name}_callback${i}`, ...args);
+                    };
                 }
             }
             let res;
@@ -115,7 +122,7 @@ function main() {
                 const serviceObject = service === 'nwjs' ? nwDevice : himdDevice;
                 res = [await (serviceObject as any)[name](...allArgs), null];
             } catch (err) {
-                console.log("Node Error: ");
+                console.log('Node Error: ');
                 console.log(err);
                 res = [null, err];
             }
@@ -125,17 +132,17 @@ function main() {
                 name,
                 value: res,
             });
-        })
+        });
 
         const addKnownDeviceCB = webusb.addKnownDevice.bind(webusb);
         nwDevice.deviceConnectedCallback = addKnownDeviceCB;
         himdDevice.deviceConnectedCallback = addKnownDeviceCB;
-        webusb.ondisconnect = event => {
-            if([nwDevice, himdDevice].some(e => e.isDeviceConnected(event.device))) {
+        webusb.ondisconnect = (event) => {
+            if ([nwDevice, himdDevice].some((e) => e.isDeviceConnected(event.device))) {
                 closeAll();
             }
-        }
+        };
     });
 }
 
-main()
+main();
